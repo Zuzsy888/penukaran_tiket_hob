@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+  <title>Gate Check — Event Ticket Validator</title>
+  <meta name="theme-color" content="#0E0E10" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Tailwind (CDN, config extended) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: {
+              950: '#0B0B0C',
+              900: '#131315',
+              850: '#18181B',
+              800: '#1E1E22',
+              700: '#2A2A30',
+              600: '#3A3A42',
+              400: '#8A8A93',
+              300: '#B4B4BC',
+            },
+            flare: {
+              DEFAULT: '#FF5400',
+              50: '#FFF1E8',
+              400: '#FF7A38',
+              500: '#FF5400',
+              600: '#E24800',
+              700: '#B83900',
+            },
+            go: { DEFAULT: '#22C55E', dim: '#123321' },
+            warn: { DEFAULT: '#F5A623', dim: '#332612' },
+            bad: { DEFAULT: '#EF4444', dim: '#331414' },
+          },
+          fontFamily: {
+            display: ['Manrope', 'sans-serif'],
+            body: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          boxShadow: {
+            glow: '0 0 0 1px rgba(255,84,0,0.25), 0 8px 30px -8px rgba(255,84,0,0.35)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- QR Scanner library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    html,
+    body {
+      background: #0B0B0C;
+      overscroll-behavior: none;
+    }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #2A2A30;
+      border-radius: 99px;
+    }
+
+    .font-display {
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .tab-pill {
+      transition: all .25s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    @keyframes pop-in {
+      0% {
+        opacity: 0;
+        transform: translateY(16px) scale(.96);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-pop {
+      animation: pop-in .28s cubic-bezier(.16, 1, .3, 1);
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0
+      }
+
+      to {
+        opacity: 1
+      }
+    }
+
+    .fade-in {
+      animation: fade-in .2s ease-out;
+    }
+
+    @keyframes scan-line {
+      0% {
+        top: 4%;
+      }
+
+      50% {
+        top: 94%;
+      }
+
+      100% {
+        top: 4%;
+      }
+    }
+
+    .scan-line {
+      animation: scan-line 2.6s ease-in-out infinite;
+    }
+
+    #qr-reader {
+      border-radius: 20px !important;
+      overflow: hidden;
+    }
+
+    #qr-reader video {
+      border-radius: 20px;
+      object-fit: cover;
+    }
+
+    #qr-reader__dashboard {
+      display: none !important;
+    }
+
+    #qr-reader__status_span {
+      display: none !important;
+    }
+
+    .spinner {
+      border: 2.5px solid rgba(255, 255, 255, 0.12);
+      border-top-color: #FF5400;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+    }
+  </style>
+</head>
+
+<body class="bg-ink-950 text-ink-300 font-body min-h-screen pb-10">
+
+  <!-- ============ CONFIG WARNING BANNER ============ -->
+  <div id="config-banner" class="hidden bg-warn/95 text-ink-950 text-sm font-semibold px-4 py-2.5 text-center">
+    ⚠️ Belum terhubung ke Google Sheets. Buka <span class="font-mono">index.html</span>, isi <span
+      class="font-mono">CONFIG.APPS_SCRIPT_URL</span> di bagian bawah file.
+  </div>
+
+  <div class="max-w-md mx-auto px-4 pt-6">
+
+    <!-- ============ HEADER ============ -->
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-flare flex items-center justify-center shadow-glow">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7l3 3 6-6M4 17l3 3 6-6" stroke="#0B0B0C" stroke-width="2.6" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </div>
+          <h1 class="font-display font-800 text-lg text-white tracking-tight">Gate Check</h1>
+        </div>
+        <p class="text-xs text-ink-400 mt-1 ml-10 -mt-0.5">Event Ticket Validator</p>
+      </div>
+      <button id="refresh-btn"
+        class="w-9 h-9 rounded-full bg-ink-850 border border-ink-700 flex items-center justify-center active:scale-90 transition">
+        <svg id="refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B4B4BC"
+          stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6M1 20v-6h6" />
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+        </svg>
+      </button>
+    </header>
+
+    <!-- ============ TABS ============ -->
+    <div class="flex bg-ink-850 border border-ink-700 rounded-2xl p-1 mb-4 relative">
+      <button data-tab="scan"
+        class="tab-btn tab-pill flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 z-10">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
+          <rect x="7" y="7" width="10" height="10" rx="1" />
+        </svg>
+        Scan
+      </button>
+      <button data-tab="manual"
+        class="tab-btn tab-pill flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 z-10">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        Manual
+      </button>
+      <button data-tab="history"
+        class="tab-btn tab-pill flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 z-10">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v5h5" />
+          <path d="M3.05 13a9 9 0 106.13-8.54" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+        Riwayat
+      </button>
+    </div>
+
+    <!-- ============ TAB: SCAN ============ -->
+    <section id="tab-scan" class="tab-panel">
+      <div class="relative bg-ink-850 border border-ink-700 rounded-[20px] p-2 mb-3">
+        <div id="qr-reader" class="w-full aspect-square bg-ink-900"></div>
+        <div id="scan-overlay" class="hidden absolute inset-2 rounded-[20px] pointer-events-none overflow-hidden">
+          <div
+            class="absolute left-[8%] right-[8%] h-[2px] bg-flare shadow-[0_0_12px_2px_rgba(255,84,0,0.7)] scan-line">
+          </div>
+          <div class="absolute inset-[8%] rounded-2xl border-2 border-flare/40"></div>
+          <div class="absolute top-[8%] left-[8%] w-6 h-6 border-t-[3px] border-l-[3px] border-flare rounded-tl-xl">
+          </div>
+          <div class="absolute top-[8%] right-[8%] w-6 h-6 border-t-[3px] border-r-[3px] border-flare rounded-tr-xl">
+          </div>
+          <div class="absolute bottom-[8%] left-[8%] w-6 h-6 border-b-[3px] border-l-[3px] border-flare rounded-bl-xl">
+          </div>
+          <div class="absolute bottom-[8%] right-[8%] w-6 h-6 border-b-[3px] border-r-[3px] border-flare rounded-br-xl">
+          </div>
+        </div>
+        <div id="scan-placeholder"
+          class="absolute inset-2 rounded-[20px] flex flex-col items-center justify-center text-center px-6 bg-ink-900">
+          <div class="w-12 h-12 rounded-full bg-ink-800 flex items-center justify-center mb-3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </div>
+          <p class="text-sm text-ink-400">Kamera belum aktif</p>
+        </div>
+      </div>
+
+      <button id="camera-toggle"
+        class="w-full bg-flare hover:bg-flare-600 active:scale-[0.98] transition text-white font-display font-700 text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-glow">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4"
+          stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+        Aktifkan Kamera
+      </button>
+      <p id="scan-status" class="text-center text-xs text-ink-400 mt-3 min-h-[16px]"></p>
+    </section>
+
+    <!-- ============ TAB: MANUAL ============ -->
+    <section id="tab-manual" class="tab-panel hidden">
+      <div class="bg-ink-850 border border-ink-700 rounded-2xl p-4 mb-4">
+        <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-2 block">E-Ticket Code / Order
+          ID</label>
+        <form id="manual-form" class="flex gap-2">
+          <input id="manual-input" type="text" autocomplete="off" placeholder="cth: ET-4CD6..."
+            class="flex-1 bg-ink-900 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-3 text-white font-mono text-sm placeholder:text-ink-600 transition" />
+          <button type="submit" id="manual-submit"
+            class="bg-flare hover:bg-flare-600 active:scale-95 transition w-12 rounded-xl flex items-center justify-center shrink-0">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+          </button>
+        </form>
+
+        <div id="manual-suggestions" class="hidden mt-3 space-y-2"></div>
+        <p id="manual-hint" class="mt-2 text-[10px] uppercase tracking-wider text-ink-500 hidden">Pilih hasil yang
+          sesuai</p>
+      </div>
+
+    </section>
+
+    <!-- ============ TAB: HISTORY (checked-in list, edit/undo/delete) ============ -->
+    <section id="tab-history" class="tab-panel hidden">
+      <div class="bg-ink-850 border border-ink-700 rounded-2xl p-4 mb-4">
+        <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-2 block">Cari di daftar sudah
+          check-in</label>
+        <div class="flex gap-2">
+          <input id="history-filter" type="text" autocomplete="off" placeholder="Cari nama atau kode..."
+            class="flex-1 bg-ink-900 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-3 text-white text-sm placeholder:text-ink-600 transition" />
+          <button id="history-refresh"
+            class="bg-ink-800 border border-ink-700 active:scale-95 transition w-12 rounded-xl flex items-center justify-center shrink-0">
+            <svg id="history-refresh-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B4B4BC"
+              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <p id="history-count" class="text-xs text-ink-400 mb-2 px-1"></p>
+      <div id="history-list" class="space-y-2"></div>
+      <div id="history-loading" class="flex justify-center py-10">
+        <div class="spinner"></div>
+      </div>
+      <p id="history-empty" class="hidden text-center text-xs text-ink-600 py-10">Belum ada tiket yang di-check-in.</p>
+    </section>
+
+  </div>
+
+  <!-- ============ RESULT MODAL (scan / manual search) ============ -->
+  <div id="modal-backdrop"
+    class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center px-0 sm:px-4">
+    <div id="modal-card"
+      class="modal-pop w-full sm:max-w-sm bg-ink-900 border-t sm:border border-ink-700 rounded-t-[28px] sm:rounded-[28px] p-6 pb-8 sm:pb-6 max-h-[88vh] overflow-y-auto">
+
+      <div id="modal-icon-wrap" class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"></div>
+      <h2 id="modal-title" class="font-display font-800 text-xl text-white text-center mb-1"></h2>
+      <p id="modal-subtitle" class="text-sm text-ink-400 text-center mb-5"></p>
+
+      <div id="modal-details"
+        class="hidden bg-ink-850 border border-ink-700 rounded-2xl divide-y divide-ink-700 mb-5 overflow-hidden">
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Order ID</span><span id="d-order"
+            class="text-white font-mono font-medium"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">E-Ticket Code</span><span
+            id="d-code" class="text-white font-mono font-medium text-right"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Nama</span><span id="d-name"
+            class="text-white font-medium text-right"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Email</span><span id="d-email"
+            class="text-white font-medium text-right truncate max-w-[60%]"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">WhatsApp</span><span id="d-wa"
+            class="text-white font-mono font-medium"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Kategori</span><span
+            id="d-kategori" class="text-white font-medium text-right"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Jumlah Tiket</span><span
+            id="d-qty" class="text-white font-medium"></span></div>
+        <div class="flex justify-between px-4 py-3 text-sm"><span class="text-ink-400">Status Bayar</span><span
+            id="d-payment" class="text-white font-medium text-right"></span></div>
+        <div id="d-time-row" class="hidden px-4 py-3 text-sm justify-between"><span class="text-ink-400">Waktu
+            Tukar</span><span id="d-time" class="text-white font-medium text-right"></span></div>
+      </div>
+
+      <div class="flex gap-2.5">
+        <button id="modal-close"
+          class="flex-1 bg-ink-800 border border-ink-700 text-ink-300 font-semibold text-sm py-3.5 rounded-2xl active:scale-95 transition">Tutup</button>
+        <button id="modal-confirm"
+          class="hidden flex-1 bg-go hover:bg-go/90 text-ink-950 font-display font-700 text-sm py-3.5 rounded-2xl active:scale-95 transition items-center justify-center gap-2">
+          Tukarkan Tiket
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EDIT MODAL (from Riwayat tab) ============ -->
+  <div id="edit-modal-backdrop"
+    class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center px-0 sm:px-4">
+    <div
+      class="modal-pop w-full sm:max-w-sm bg-ink-900 border-t sm:border border-ink-700 rounded-t-[28px] sm:rounded-[28px] p-6 pb-8 sm:pb-6 max-h-[90vh] overflow-y-auto">
+
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-display font-800 text-lg text-white">Edit Data Tiket</h2>
+        <button id="edit-modal-close"
+          class="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center active:scale-90 transition">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B4B4BC" stroke-width="2.4"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-ink-850 border border-ink-700 rounded-xl px-3.5 py-2.5 mb-4 flex justify-between items-center">
+        <span class="text-xs text-ink-400">E-Ticket Code</span>
+        <span id="edit-code-display" class="font-mono text-sm text-flare-400 font-semibold"></span>
+      </div>
+
+      <div class="space-y-3 mb-2">
+        <div>
+          <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-1.5 block">Nama Lengkap</label>
+          <input id="edit-nama" type="text"
+            class="w-full bg-ink-850 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-2.5 text-white text-sm transition" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-1.5 block">Email</label>
+          <input id="edit-email" type="email"
+            class="w-full bg-ink-850 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-2.5 text-white text-sm transition" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-1.5 block">Nomor WhatsApp</label>
+          <input id="edit-wa" type="text"
+            class="w-full bg-ink-850 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-2.5 text-white text-sm font-mono transition" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-1.5 block">Kategori
+              Tiket</label>
+            <input id="edit-kategori" type="text"
+              class="w-full bg-ink-850 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-2.5 text-white text-sm transition" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-ink-400 uppercase tracking-wider mb-1.5 block">Jumlah Tiket</label>
+            <input id="edit-qty" type="number" min="1"
+              class="w-full bg-ink-850 border border-ink-700 focus:border-flare rounded-xl px-3.5 py-2.5 text-white text-sm transition" />
+          </div>
+        </div>
+        <div class="flex justify-between text-xs text-ink-400 px-1 pt-1">
+          <span>Waktu check-in</span>
+          <span id="edit-time-display" class="text-ink-300 font-medium"></span>
+        </div>
+      </div>
+
+      <button id="edit-save"
+        class="w-full mt-4 bg-flare hover:bg-flare-600 active:scale-[0.98] transition text-white font-display font-700 text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-glow">
+        Simpan Perubahan
+      </button>
+
+      <div class="flex gap-2.5 mt-2.5">
+        <button id="edit-undo"
+          class="flex-1 bg-warn/10 border border-warn/30 text-warn font-semibold text-sm py-3 rounded-2xl active:scale-95 transition">
+          Batalkan Check-in
+        </button>
+        <button id="edit-delete"
+          class="flex-1 bg-bad/10 border border-bad/30 text-bad font-semibold text-sm py-3 rounded-2xl active:scale-95 transition">
+          Hapus Data
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <div id="toast"
+    class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-ink-800 border border-ink-700 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg text-center max-w-[88vw]">
+  </div>
+
+  <script>
+    /* ============================================================
+       CONFIG — sudah diisi dengan Web App URL kamu
+       ============================================================ */
+    const CONFIG = {
+      APPS_SCRIPT_URL: "https://script.google.com/macros/s/PASTE_YOUR_WEB_APP_ID/exec",
+      STATS_REFRESH_MS: 15000,
+    };
+
+    /* ============================================================
+       STATE
+       ============================================================ */
+    let html5QrCode = null;
+    let cameraRunning = false;
+    let lastScan = { code: "", time: 0 };
+    let historyTickets = [];
+    let currentEditCode = null;
+    let manualSuggestionTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    /* ============================================================
+       INIT
+       ============================================================ */
+    document.addEventListener("DOMContentLoaded", () => {
+      if (!isConfigured()) {
+        $("config-banner").classList.remove("hidden");
+      }
+      if (location.protocol === "file:") {
+        $("scan-status").textContent = "Buka file ini lewat localhost/HTTPS agar kamera dan fetch ke Google Sheets bisa berjalan.";
+      }
+      setupTabs();
+      setupCamera();
+      setupManualSearch();
+      setupModal();
+      setupHistoryTab();
+      setupEditModal();
+      $("refresh-btn").addEventListener("click", () => loadHistory(true));
+    });
+
+    /* ============================================================
+       TABS
+       ============================================================ */
+    function setupTabs() {
+      const buttons = document.querySelectorAll(".tab-btn");
+      function activate(tab) {
+        buttons.forEach(b => {
+          const active = b.dataset.tab === tab;
+          b.classList.toggle("bg-flare", active);
+          b.classList.toggle("text-white", active);
+          b.classList.toggle("text-ink-400", !active);
+          b.classList.toggle("shadow-glow", active);
+        });
+        $("tab-scan").classList.toggle("hidden", tab !== "scan");
+        $("tab-manual").classList.toggle("hidden", tab !== "manual");
+        $("tab-history").classList.toggle("hidden", tab !== "history");
+        if (tab !== "scan" && cameraRunning) stopCamera();
+        if (tab === "history") loadHistory();
+      }
+      buttons.forEach(b => b.addEventListener("click", () => activate(b.dataset.tab)));
+      activate("scan");
+    }
+
+    /* ============================================================
+       CAMERA / QR SCANNER
+       ============================================================ */
+    function setupCamera() {
+      $("camera-toggle").addEventListener("click", () => {
+        if (location.protocol === "file:") {
+          showToast("Gunakan localhost atau HTTPS agar kamera bisa aktif.");
+          $("scan-status").textContent = "Buka lewat localhost/HTTPS agar kamera bisa berjalan.";
+          return;
+        }
+        cameraRunning ? stopCamera() : startCamera();
+      });
+    }
+
+    function startCamera() {
+      html5QrCode = new Html5Qrcode("qr-reader", { verbose: false });
+      const config = { fps: 10, qrbox: { width: 230, height: 230 }, aspectRatio: 1 };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        () => { }
+      ).then(() => {
+        cameraRunning = true;
+        $("scan-placeholder").classList.add("hidden");
+        $("scan-overlay").classList.remove("hidden");
+        $("camera-toggle").innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Matikan Kamera`;
+        $("scan-status").textContent = "Arahkan kamera ke QR Code tiket";
+      }).catch(err => {
+        showToast("Gagal mengakses kamera. Periksa izin browser.");
+        console.error(err);
+      });
+    }
+
+    function stopCamera() {
+      if (!html5QrCode) return;
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        cameraRunning = false;
+        $("scan-placeholder").classList.remove("hidden");
+        $("scan-overlay").classList.add("hidden");
+        $("camera-toggle").innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Aktifkan Kamera`;
+        $("scan-status").textContent = "";
+      }).catch(() => { });
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (decodedText === lastScan.code && now - lastScan.time < 4000) return;
+      lastScan = { code: decodedText, time: now };
+
+      if (navigator.vibrate) navigator.vibrate(60);
+      $("scan-status").textContent = "Memproses...";
+      lookupTicket(decodedText.trim());
+    }
+
+    /* ============================================================
+       MANUAL SEARCH
+       ============================================================ */
+    function setupManualSearch() {
+      $("manual-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const val = $("manual-input").value.trim();
+        if (!val) return;
+
+        if (!$("manual-suggestions").classList.contains("hidden") && $("manual-suggestions").children.length > 0) {
+          return;
+        }
+
+        $("manual-suggestions").classList.add("hidden");
+        $("manual-hint").classList.add("hidden");
+        lookupTicket(val);
+      });
+
+      $("manual-input").addEventListener("input", () => {
+        const val = $("manual-input").value.trim();
+        if (manualSuggestionTimer) clearTimeout(manualSuggestionTimer);
+
+        if (!val) {
+          $("manual-suggestions").classList.add("hidden");
+          $("manual-suggestions").innerHTML = "";
+          $("manual-hint").classList.add("hidden");
+          return;
+        }
+
+        manualSuggestionTimer = setTimeout(() => {
+          fetchManualSuggestions(val);
+        }, 120);
+      });
+    }
+
+    async function fetchManualSuggestions(query) {
+      try {
+        const data = await apiGet({ action: "search_prefix", q: query });
+        const results = data && Array.isArray(data.results) ? data.results : [];
+        const suggestions = $("manual-suggestions");
+        const hint = $("manual-hint");
+        suggestions.innerHTML = "";
+
+        if (!results.length) {
+          suggestions.classList.add("hidden");
+          hint.classList.add("hidden");
+          return;
+        }
+
+        hint.classList.remove("hidden");
+
+        results.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "w-full text-left bg-ink-900 border border-ink-700 hover:border-flare rounded-xl px-3 py-2.5 transition";
+          btn.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-mono text-xs text-white truncate">${escapeHtml(item.code || "-")}</span>
+              <span class="text-[10px] ${item.status === 'Sudah Ditukarkan' ? 'text-warn bg-warn/10' : 'text-go bg-go/10'} px-1.5 py-0.5 rounded-full">${escapeHtml(item.status || "Aktif")}</span>
+            </div>
+            <div class="text-[11px] text-ink-400 mt-1 truncate">${escapeHtml(item.name || "-")}</div>
+          `;
+          btn.addEventListener("click", () => {
+            $("manual-input").value = item.code;
+            $("manual-suggestions").classList.add("hidden");
+            $("manual-hint").classList.add("hidden");
+            lookupTicket(item.code);
+          });
+          suggestions.appendChild(btn);
+        });
+
+        suggestions.classList.remove("hidden");
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    /* ============================================================
+       HISTORY TAB (list checked-in + edit/undo/delete)
+       ============================================================ */
+    function setupHistoryTab() {
+      $("history-refresh").addEventListener("click", () => loadHistory(true));
+      $("history-filter").addEventListener("input", renderHistoryList);
+    }
+
+    async function loadHistory(spin) {
+      if (!isConfigured()) return;
+      if (spin) $("history-refresh-icon").classList.add("animate-spin");
+      $("history-loading").classList.remove("hidden");
+      $("history-empty").classList.add("hidden");
+      try {
+        const data = await apiGet({ action: "list_checked" });
+        if (data.ok) {
+          historyTickets = data.tickets || [];
+          renderHistoryList();
+        } else {
+          showToast(data.message || "Gagal memuat riwayat");
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Gagal menghubungi server.");
+      } finally {
+        $("history-loading").classList.add("hidden");
+        if (spin) setTimeout(() => $("history-refresh-icon").classList.remove("animate-spin"), 500);
+      }
+    }
+
+    function renderHistoryList() {
+      const q = $("history-filter").value.trim().toLowerCase();
+      const filtered = !q ? historyTickets : historyTickets.filter(t =>
+        String(t.Nama_Lengkap).toLowerCase().includes(q) ||
+        String(t.E_Ticket_Code).toLowerCase().includes(q) ||
+        String(t.Order_ID).toLowerCase().includes(q)
+      );
+
+      $("history-count").textContent = `${filtered.length} tiket sudah check-in`;
+      const list = $("history-list");
+      list.innerHTML = "";
+      $("history-empty").classList.toggle("hidden", filtered.length > 0 || historyTickets.length !== 0);
+      if (historyTickets.length === 0) $("history-empty").classList.remove("hidden");
+
+      filtered.forEach(t => {
+        const el = document.createElement("button");
+        el.className = "w-full bg-ink-850 border border-ink-700 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition flex items-center justify-between gap-3";
+        el.innerHTML = `
+      <div class="min-w-0">
+        <p class="text-white font-semibold text-sm truncate">${escapeHtml(t.Nama_Lengkap || "-")}</p>
+        <p class="font-mono text-xs text-ink-400 truncate mt-0.5">${escapeHtml(t.E_Ticket_Code || "-")}</p>
+        <p class="text-[11px] text-ink-600 mt-0.5">${escapeHtml(t.Waktu_Penukaran || "-")}</p>
+      </div>
+      <svg width="16" height="16" class="shrink-0" viewBox="0 0 24 24" fill="none" stroke="#8A8A93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+    `;
+        el.addEventListener("click", () => openEditModal(t));
+        list.appendChild(el);
+      });
+    }
+
+    /* ============================================================
+       EDIT MODAL
+       ============================================================ */
+    function setupEditModal() {
+      $("edit-modal-close").addEventListener("click", closeEditModal);
+      $("edit-modal-backdrop").addEventListener("click", (e) => {
+        if (e.target === $("edit-modal-backdrop")) closeEditModal();
+      });
+      $("edit-save").addEventListener("click", saveEdit);
+      $("edit-undo").addEventListener("click", undoCheckinFromEdit);
+      $("edit-delete").addEventListener("click", deleteFromEdit);
+    }
+
+    function openEditModal(ticket) {
+      currentEditCode = ticket.E_Ticket_Code;
+      $("edit-code-display").textContent = ticket.E_Ticket_Code || "-";
+      $("edit-nama").value = ticket.Nama_Lengkap || "";
+      $("edit-email").value = ticket.Email || "";
+      $("edit-wa").value = ticket.Nomor_WhatsApp || "";
+      $("edit-kategori").value = ticket.Kategori_Tiket || "";
+      $("edit-qty").value = ticket.Jumlah_Tiket || 1;
+      $("edit-time-display").textContent = ticket.Waktu_Penukaran || "-";
+      resetEditButtons();
+      $("edit-modal-backdrop").classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+      $("edit-modal-backdrop").classList.add("hidden");
+      currentEditCode = null;
+    }
+
+    function resetEditButtons() {
+      $("edit-save").innerHTML = "Simpan Perubahan";
+      $("edit-save").disabled = false;
+      $("edit-undo").innerHTML = "Batalkan Check-in";
+      $("edit-undo").disabled = false;
+      $("edit-delete").innerHTML = "Hapus Data";
+      $("edit-delete").disabled = false;
+    }
+
+    async function saveEdit() {
+      if (!currentEditCode) return;
+      $("edit-save").innerHTML = `<div class="spinner mx-auto"></div>`;
+      $("edit-save").disabled = true;
+      try {
+        const data = await apiPost({
+          action: "update",
+          code: currentEditCode,
+          fields: {
+            Nama_Lengkap: $("edit-nama").value.trim(),
+            Email: $("edit-email").value.trim(),
+            Nomor_WhatsApp: $("edit-wa").value.trim(),
+            Kategori_Tiket: $("edit-kategori").value.trim(),
+            Jumlah_Tiket: $("edit-qty").value.trim(),
+          },
+        });
+        if (data.ok) {
+          showToast("✓ Perubahan disimpan");
+          closeEditModal();
+          loadHistory();
+        } else {
+          showToast(data.message || "Gagal menyimpan");
+          resetEditButtons();
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Gagal menghubungi server.");
+        resetEditButtons();
+      }
+    }
+
+    async function undoCheckinFromEdit() {
+      if (!currentEditCode) return;
+      if (!confirm('Batalkan status check-in tiket ini? Status akan kembali menjadi "Belum Ditukarkan".')) return;
+      $("edit-undo").innerHTML = `<div class="spinner mx-auto"></div>`;
+      $("edit-undo").disabled = true;
+      try {
+        const data = await apiPost({ action: "undo_checkin", code: currentEditCode });
+        if (data.ok) {
+          showToast("↩ Check-in dibatalkan");
+          closeEditModal();
+          loadHistory();
+        } else {
+          showToast(data.message || "Gagal membatalkan check-in");
+          resetEditButtons();
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Gagal menghubungi server.");
+        resetEditButtons();
+      }
+    }
+
+    async function deleteFromEdit() {
+      if (!currentEditCode) return;
+      if (!confirm("Hapus data tiket ini secara permanen dari spreadsheet? Tindakan ini tidak bisa dibatalkan.")) return;
+      $("edit-delete").innerHTML = `<div class="spinner mx-auto"></div>`;
+      $("edit-delete").disabled = true;
+      try {
+        const data = await apiPost({ action: "delete", code: currentEditCode });
+        if (data.ok) {
+          showToast("🗑 Data tiket dihapus");
+          closeEditModal();
+          loadHistory();
+        } else {
+          showToast(data.message || "Gagal menghapus data");
+          resetEditButtons();
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Gagal menghubungi server.");
+        resetEditButtons();
+      }
+    }
+
+    /* ============================================================
+       API CALLS
+       ============================================================ */
+    async function parseJsonResponse(res) {
+      const text = await res.text();
+      const contentType = (res.headers.get("content-type") || "").toLowerCase();
+      const htmlLike = contentType.includes("text/html") || /accounts\.google\.com|<html|<!doctype html>/i.test(text);
+
+      if (!text) {
+        return { ok: false, message: `Server mengembalikan respons kosong (${res.status})` };
+      }
+
+      if (htmlLike) {
+        return {
+          ok: false,
+          message: "URL Apps Script belum valid. Gunakan deployment Web App dengan /exec dan akses 'Anyone'.",
+        };
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return { ok: false, message: `Server mengembalikan respons non-JSON (${res.status})` };
+      }
+    }
+
+    async function apiGet(params) {
+      const url = new URL(CONFIG.APPS_SCRIPT_URL);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && String(v).trim() !== "") {
+          url.searchParams.set(k, String(v));
+        }
+      });
+      if (CONFIG.TOKEN) url.searchParams.set("token", CONFIG.TOKEN);
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) return parseJsonResponse(res);
+      return parseJsonResponse(res);
+    }
+
+    async function apiPost(payload) {
+      // text/plain avoids a CORS preflight against Apps Script (which can't handle OPTIONS)
+      const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ ...payload, token: CONFIG.TOKEN || undefined }),
+        cache: "no-store",
+      });
+      if (!res.ok) return parseJsonResponse(res);
+      return parseJsonResponse(res);
+    }
+
+    async function lookupTicket(code) {
+      const cleanCode = String(code || "").trim();
+      if (!cleanCode) {
+        showToast("Kode tiket tidak boleh kosong.");
+        return;
+      }
+      if (!isConfigured()) {
+        showToast("Sambungkan ke Google Sheets dulu (lihat panduan).");
+        return;
+      }
+      $("manual-submit").innerHTML = `<div class="spinner"></div>`;
+      try {
+        const data = await apiGet({ action: "search", code: cleanCode });
+        $("manual-submit").innerHTML = searchIconSvg();
+
+        if (!data.ok || !data.found) {
+          showResultModal("invalid", null, cleanCode);
+          $("scan-status").textContent = "";
+          return;
+        }
+
+        if (data.ticket.Status_Penukaran === "Sudah Ditukarkan") {
+          showResultModal("used", data.ticket, cleanCode);
+        } else {
+          showResultModal("valid", data.ticket, cleanCode);
+        }
+      } catch (e) {
+        console.error(e);
+        $("manual-submit").innerHTML = searchIconSvg();
+        showToast("Gagal menghubungi server. Cek koneksi internet.");
+      } finally {
+        $("scan-status").textContent = cameraRunning ? "Arahkan kamera ke QR Code tiket" : "";
+      }
+    }
+
+    async function confirmCheckin(code) {
+      $("modal-confirm").innerHTML = `<div class="spinner"></div>`;
+      $("modal-confirm").disabled = true;
+      try {
+        const data = await apiPost({ action: "checkin", code });
+        if (data.ok) {
+          showToast("✓ Tiket berhasil ditukarkan");
+          showResultModal("valid-confirmed", data.ticket, code);
+        } else {
+          showToast(data.message || "Gagal menukarkan tiket");
+          $("modal-confirm").innerHTML = "Tukarkan Tiket";
+          $("modal-confirm").disabled = false;
+        }
+      } catch (e) {
+        console.error(e);
+        showToast("Gagal menghubungi server.");
+        $("modal-confirm").innerHTML = "Tukarkan Tiket";
+        $("modal-confirm").disabled = false;
+      }
+    }
+
+    function isConfigured() {
+      if (!CONFIG.APPS_SCRIPT_URL || CONFIG.APPS_SCRIPT_URL.includes("PASTE_YOUR")) return false;
+      if (!CONFIG.APPS_SCRIPT_URL.includes("script.google.com")) return false;
+      if (CONFIG.APPS_SCRIPT_URL.includes("/dev")) return false;
+      if (CONFIG.APPS_SCRIPT_URL.includes("/edit")) return false;
+      return CONFIG.APPS_SCRIPT_URL.includes("/exec");
+    }
+
+    /* ============================================================
+       RESULT MODAL (scan / manual)
+       ============================================================ */
+    function setupModal() {
+      $("modal-close").addEventListener("click", closeModal);
+      $("modal-backdrop").addEventListener("click", (e) => {
+        if (e.target === $("modal-backdrop")) closeModal();
+      });
+    }
+
+    function closeModal() {
+      $("modal-backdrop").classList.add("hidden");
+    }
+
+    const THEMES = {
+      valid: {
+        title: "Tiket Valid",
+        subtitle: "Data ditemukan & belum ditukarkan",
+        icon: "check",
+        ring: "bg-go/15 text-go",
+        showConfirm: true,
+      },
+      "valid-confirmed": {
+        title: "Berhasil Ditukarkan",
+        subtitle: "Peserta dipersilakan masuk",
+        icon: "check",
+        ring: "bg-go/15 text-go",
+        showConfirm: false,
+      },
+      used: {
+        title: "Tiket Sudah Ditukarkan",
+        subtitle: "QR / kode ini sudah pernah check-in",
+        icon: "warn",
+        ring: "bg-warn/15 text-warn",
+        showConfirm: false,
+      },
+      invalid: {
+        title: "Tidak Ditemukan",
+        subtitle: "QR Code / E-Ticket Code tidak valid",
+        icon: "cross",
+        ring: "bg-bad/15 text-bad",
+        showConfirm: false,
+      },
+    };
+
+    const ICONS = {
+      check: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+      warn: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>`,
+      cross: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
+    };
+
+    function showResultModal(kind, ticket, fallbackCode) {
+      const t = THEMES[kind];
+      $("modal-icon-wrap").className = `w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 ${t.ring}`;
+      $("modal-icon-wrap").innerHTML = ICONS[t.icon];
+      $("modal-title").textContent = t.title;
+      $("modal-subtitle").textContent = t.subtitle;
+
+      if (ticket) {
+        $("modal-details").classList.remove("hidden");
+        $("d-order").textContent = ticket.Order_ID || "-";
+        $("d-code").textContent = ticket.E_Ticket_Code || fallbackCode;
+        $("d-name").textContent = ticket.Nama_Lengkap || "-";
+        $("d-email").textContent = ticket.Email || "-";
+        $("d-wa").textContent = ticket.Nomor_WhatsApp || "-";
+        $("d-kategori").textContent = ticket.Kategori_Tiket || "-";
+        $("d-qty").textContent = ticket.Jumlah_Tiket || "-";
+        $("d-payment").textContent = ticket.Status_Pembayaran || "-";
+        if (ticket.Waktu_Penukaran) {
+          $("d-time-row").classList.remove("hidden");
+          $("d-time-row").classList.add("flex");
+          $("d-time").textContent = ticket.Waktu_Penukaran;
+        } else {
+          $("d-time-row").classList.add("hidden");
+        }
+      } else {
+        $("modal-details").classList.add("hidden");
+      }
+
+      const confirmBtn = $("modal-confirm");
+      if (t.showConfirm) {
+        confirmBtn.classList.remove("hidden");
+        confirmBtn.classList.add("flex");
+        confirmBtn.innerHTML = "Tukarkan Tiket";
+        confirmBtn.disabled = false;
+        confirmBtn.onclick = () => confirmCheckin(ticket.E_Ticket_Code || fallbackCode);
+      } else {
+        confirmBtn.classList.add("hidden");
+        confirmBtn.classList.remove("flex");
+      }
+
+      $("modal-backdrop").classList.remove("hidden");
+    }
+
+    /* ============================================================
+       HELPERS
+       ============================================================ */
+    function showToast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.remove("hidden");
+      el.classList.add("fade-in");
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.add("hidden"), 2600);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function searchIconSvg() {
+      return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
+    }
+  </script>
+</body>
+
+</html>
