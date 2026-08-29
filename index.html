@@ -14,6 +14,8 @@
     href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
     rel="stylesheet">
 
+  <script src="/config.js"></script>
+
   <!-- Tailwind (CDN, config extended) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -477,7 +479,6 @@
           window.__ENV__?.APPS_SCRIPT_URL ||
           window.env?.APPS_SCRIPT_URL
         )) ||
-        (typeof process !== "undefined" && process.env && process.env.APPS_SCRIPT_URL) ||
         "https://script.google.com/macros/s/PASTE_YOUR_WEB_APP_ID/exec",
       STATS_REFRESH_MS: 15000,
     };
