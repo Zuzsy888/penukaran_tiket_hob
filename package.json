@@ -1,0 +1,8 @@
+{
+    "name": "penukaran-tiket-hob",
+    "private": true,
+    "scripts": {
+        "build": "node scripts/build-config.js",
+        "build:config": "node scripts/build-config.js"
+    }
+}

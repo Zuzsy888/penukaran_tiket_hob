@@ -20,17 +20,23 @@ Aplikasi frontend untuk validasi tiket acara menggunakan QR code dan pencarian m
 
 ## Struktur proyek
 - `index.html` — frontend aplikasi
+- `config.js` — runtime config URL Apps Script
 - `google-apps-script.gs` — backend Apps Script
-- `PANDUAN.md` — panduan setup dan penggunaan
 - `.gitignore` — file yang diabaikan Git
 
-## Catatan penting
-Project ini menggunakan Google Apps Script Web App dan Google Sheets sebagai database. URL Apps Script dan konfigurasi sensitif tidak boleh dipublish secara terbuka di repo publik.
+## Keamanan dan deploy
+URL Apps Script tidak boleh ditaruh di repo GitHub publik. Gunakan variabel environment di Vercel atau hosting Anda.
 
-Untuk deployment yang aman:
-1. Simpan URL Apps Script di environment variable pada hosting atau di konfigurasi deploy Anda.
-2. Jangan menaruh token rahasia atau link yang bersifat pribadi di repo publik.
-3. Pastikan sheet Google Sheets hanya bisa diakses sesuai kebutuhan.
+### Set di Vercel
+1. Buka dashboard Vercel project Anda.
+2. Masuk ke Settings > Environment Variables.
+3. Tambahkan variabel:
+   - Name: `APPS_SCRIPT_URL`
+   - Value: your Google Apps Script Web App URL ending with `/exec`
+4. Deploy ulang project.
+
+### Cara kerja pada repo publik
+Project ini sudah diatur agar URL tidak hardcoded di file publik. File `config.js` di-generate otomatis dari variable environment saat build.
 
 ## Cara menjalankan lokal
 1. Jalankan server lokal di folder project:
@@ -41,7 +47,7 @@ Untuk deployment yang aman:
    ```text
    http://localhost:8000/
    ```
-3. Pastikan URL Apps Script pada file frontend sudah benar dan berakhiran `/exec`.
+3. Pastikan `APPS_SCRIPT_URL` valid dan berakhiran `/exec`.
 
 ## Lisensi
 Proyek ini dibuat untuk kebutuhan internal event dan dapat dimodifikasi sesuai kebutuhan.
